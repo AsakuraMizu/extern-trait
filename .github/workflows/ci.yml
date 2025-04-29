@@ -11,6 +11,10 @@ on:
 env:
   RUST_BACKTRACE: 1
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -52,7 +56,6 @@ jobs:
           - x86_64-pc-windows-msvc
           - x86_64-pc-windows-gnu
           - i686-pc-windows-msvc
-          - i686-pc-windows-gnu
 
           - x86_64-apple-darwin
           - aarch64-apple-darwin
@@ -61,6 +64,9 @@ jobs:
           - os: ubuntu-latest
             cross: true
 
+          - target: x86_64-unknown-linux-gnu
+            cross: false
+
           - target: x86_64-pc-windows-msvc
             os: windows-latest
             cross: false
@@ -68,9 +74,6 @@ jobs:
             os: windows-latest
             cross: false
           - target: i686-pc-windows-msvc
-            os: windows-latest
-            cross: false
-          - target: i686-pc-windows-gnu
             os: windows-latest
             cross: false
 
@@ -101,5 +104,4 @@ jobs:
           printf 'CARGO_CMD=cross\n' >> $GITHUB_ENV
 
       - name: Test
-        shell: bash
         run: ${CARGO_CMD} test --all-features --target ${{ matrix.target }} --verbose
