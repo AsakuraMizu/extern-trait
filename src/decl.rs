@@ -29,6 +29,20 @@ pub fn expand(proxy: ItemStruct, input: ItemTrait) -> Result<TokenStream> {
     let macro_name = format_ident!("__extern_trait_{}", trait_name);
     let mut macro_content = TokenStream::new();
 
+    let symbol_prefix = format!(
+        "__extern_trait_{}_{}_{}_{}",
+        std::env::var("CARGO_PKG_NAME")
+            .as_deref()
+            .unwrap_or("<unknown>"),
+        std::env::var("CARGO_PKG_VERSION")
+            .as_deref()
+            .unwrap_or("<unknown>"),
+        std::env::var("CARGO_CRATE_NAME")
+            .as_deref()
+            .unwrap_or("<unknown>"),
+        trait_name
+    );
+
     for t in &input.items {
         let TraitItem::Fn(f) = t else {
             impl_content.extend(
@@ -38,10 +52,12 @@ pub fn expand(proxy: ItemStruct, input: ItemTrait) -> Result<TokenStream> {
             continue;
         };
 
-        match generate_proxy_impl(proxy_name, trait_name, &f.sig) {
+        let export_name = format!("{}_{}", symbol_prefix, f.sig.ident);
+
+        match generate_proxy_impl(proxy_name, &export_name, &f.sig) {
             Ok(i) => {
                 impl_content.extend(i);
-                macro_content.extend(generate_macro_rules(None, trait_name, &f.sig));
+                macro_content.extend(generate_macro_rules(None, &export_name, &f.sig));
             }
             Err(e) => {
                 impl_content.extend(e.to_compile_error());
@@ -68,7 +84,7 @@ pub fn expand(proxy: ItemStruct, input: ItemTrait) -> Result<TokenStream> {
         }
     }
 
-    let extern_drop_name = format_ident!("__extern_trait_{}_drop", trait_name);
+    let drop_name = format!("{symbol_prefix}_drop");
 
     Ok(quote! {
         #input
@@ -84,9 +100,10 @@ pub fn expand(proxy: ItemStruct, input: ItemTrait) -> Result<TokenStream> {
         impl Drop for #proxy_name {
             fn drop(&mut self) {
                 unsafe extern "Rust" {
-                    fn #extern_drop_name(this: *mut #proxy_name);
+                    #[link_name = #drop_name]
+                    fn drop(this: *mut #proxy_name);
                 }
-                unsafe { #extern_drop_name(self) }
+                unsafe { drop(self) }
             }
         }
 
@@ -94,13 +111,12 @@ pub fn expand(proxy: ItemStruct, input: ItemTrait) -> Result<TokenStream> {
         #[macro_export]
         macro_rules! #macro_name {
             ($trait:path, $ty:ty) => {
-                #[allow(non_snake_case)]
                 const _: () = {
                     #macro_content
 
                     #[doc(hidden)]
-                    #[unsafe(no_mangle)]
-                    unsafe extern "Rust" fn #extern_drop_name(this: &mut $ty) {
+                    #[unsafe(export_name = #drop_name)]
+                    unsafe extern "Rust" fn drop(this: &mut $ty) {
                         unsafe { ::core::ptr::drop_in_place(this) };
                     }
                 };
@@ -112,15 +128,13 @@ pub fn expand(proxy: ItemStruct, input: ItemTrait) -> Result<TokenStream> {
     })
 }
 
-fn generate_proxy_impl(proxy_name: &Ident, scope: &Ident, sig: &Signature) -> Result<TokenStream> {
+fn generate_proxy_impl(
+    proxy_name: &Ident,
+    export_name: &str,
+    sig: &Signature,
+) -> Result<TokenStream> {
     let mut sig = sig.clone();
-
-    let extern_fn_name = format_ident!(
-        "__extern_trait_{}_{}",
-        scope,
-        sig.ident,
-        span = sig.ident.span()
-    );
+    let ident = &sig.ident;
 
     let args = sig
         .inputs
@@ -199,21 +213,15 @@ fn generate_proxy_impl(proxy_name: &Ident, scope: &Ident, sig: &Signature) -> Re
     Ok(quote! {
         #sig {
             unsafe extern "Rust" {
-                fn #extern_fn_name(#(_: #inputs),*) #output;
+                #[link_name = #export_name]
+                fn #ident(#(_: #inputs),*) #output;
             }
-            unsafe { #deref #extern_fn_name(#(#args),*) }
+            unsafe { #deref #ident(#(#args),*) }
         }
     })
 }
 
-fn generate_macro_rules(trait_: Option<&Ident>, scope: &Ident, sig: &Signature) -> TokenStream {
-    let extern_fn_name = format_ident!(
-        "__extern_trait_{}_{}",
-        scope,
-        sig.ident,
-        span = sig.ident.span()
-    );
-
+fn generate_macro_rules(trait_: Option<&Ident>, export_name: &str, sig: &Signature) -> TokenStream {
     let ident = &sig.ident;
 
     let output = match &sig.output {
@@ -272,8 +280,8 @@ fn generate_macro_rules(trait_: Option<&Ident>, scope: &Ident, sig: &Signature) 
 
     quote! {
         #[doc(hidden)]
-        #[unsafe(no_mangle)]
-        unsafe extern "Rust" fn #extern_fn_name(#(#args: #arg_tys),*) #output {
+        #[unsafe(export_name = #export_name)]
+        unsafe extern "Rust" fn #ident(#(#args: #arg_tys),*) #output {
             <$ty as #trait_>::#ident(#(#args),*)
         }
     }

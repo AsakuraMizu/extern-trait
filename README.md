@@ -50,39 +50,42 @@ This will generate the following code (adapted):
 ```rust
 // In crate A
 // #[extern_trait(HelloProxy)]
+/// A Hello trait.
+/// # Safety
+/// See [`extern_trait`].
 pub unsafe trait Hello {
     fn new(num: i32) -> Self;
     fn hello(&self);
 }
 
-/// Some comments
+/// A proxy type for [`Hello`].
 pub(crate) struct HelloProxy(*const (), *const ());
 
 unsafe impl Hello for HelloProxy {
     fn new(_0: i32) -> Self {
         unsafe extern "Rust" {
-            fn __extern_trait_Hello_new(_: i32) -> HelloProxy;
-
+            #[link_name = "__extern_trait_A_0.1.0_A_Hello_new"]
+            fn new(_: i32) -> HelloProxy;
         }
-        unsafe { __extern_trait_Hello_new(_0) }
+        unsafe { new(_0) }
     }
 
     fn hello(&self) {
         unsafe extern "Rust" {
-            fn __extern_trait_Hello_hello(_: *const HelloProxy);
-
+            #[link_name = "__extern_trait_A_0.1.0_A_Hello_hello"]
+            fn hello(_: *const HelloProxy);
         }
-        unsafe { __extern_trait_Hello_hello(self) }
+        unsafe { hello(self) }
     }
 }
 
 impl Drop for HelloProxy {
     fn drop(&mut self) {
         unsafe extern "Rust" {
-            fn __extern_trait_Hello_drop(this: *mut HelloProxy);
-
+            #[link_name = "__extern_trait_A_0.1.0_A_Hello_drop"]
+            fn drop(this: *mut HelloProxy);
         }
-        unsafe { __extern_trait_Hello_drop(self) }
+        unsafe { drop(self) }
     }
 }
 
@@ -107,21 +110,20 @@ const _: () = {
     );
 };
 
-#[allow(non_snake_case)]
 const _: () = {
     #[doc(hidden)]
-    #[unsafe(no_mangle)]
-    unsafe extern "Rust" fn __extern_trait_Hello_new(_0: i32) -> HelloImpl {
+    #[unsafe(export_name = "__extern_trait_A_0.1.0_A_Hello_new")]
+    unsafe extern "Rust" fn new(_0: i32) -> HelloImpl {
         <HelloImpl as Hello>::new(_0)
     }
     #[doc(hidden)]
-    #[unsafe(no_mangle)]
-    unsafe extern "Rust" fn __extern_trait_Hello_hello(_0: &HelloImpl) {
+    #[unsafe(export_name = "__extern_trait_A_0.1.0_A_Hello_hello")]
+    unsafe extern "Rust" fn hello(_0: &HelloImpl) {
         <HelloImpl as Hello>::hello(_0)
     }
     #[doc(hidden)]
-    #[unsafe(no_mangle)]
-    unsafe extern "Rust" fn __extern_trait_Hello_drop(this: &mut HelloImpl) {
+    #[unsafe(export_name = "__extern_trait_A_0.1.0_A_Hello_drop")]
+    unsafe extern "Rust" fn drop(this: &mut HelloImpl) {
         unsafe { ::core::ptr::drop_in_place(this) };
     }
 };
