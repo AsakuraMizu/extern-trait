@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 authors = ["Asakura Mizu <asakuramizu111@gmail.com>"]
 description = "Opaque foreign trait implementation"
+keywords = ["extern", "ffi", "trait"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/AsakuraMizu/extern-trait"
 
