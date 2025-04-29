@@ -1,0 +1,124 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+env:
+  RUST_BACKTRACE: 1
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@clippy
+      - name: Check format
+        run: cargo fmt --all --check
+      - name: Check clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+      - name: Check docs
+        run: cargo doc --all-features --no-deps
+
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        toolchain: ["nightly", "stable"]
+        setup:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-latest
+            target: i686-unknown-linux-gnu
+
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            cross: true
+          - os: ubuntu-latest
+            target: arm-unknown-linux-gnueabi
+            cross: true
+          - os: ubuntu-latest
+            target: arm-unknown-linux-gnueabihf
+            cross: true
+          - os: ubuntu-latest
+            target: armv7-unknown-linux-gnueabi
+            cross: true
+          - os: ubuntu-latest
+            target: armv7-unknown-linux-gnueabihf
+            cross: true
+
+          - os: ubuntu-latest
+            target: loongarch64-unknown-linux-gnu
+            cross: true
+
+          - os: ubuntu-latest
+            target: mips-unknown-linux-gnu
+            cross: true
+          - os: ubuntu-latest
+            target: mipsel-unknown-linux-gnu
+            cross: true
+          - os: ubuntu-latest
+            target: mips64-unknown-linux-gnuabi64
+            cross: true
+          - os: ubuntu-latest
+            target: mips64el-unknown-linux-gnuabi64
+            cross: true
+
+          - os: ubuntu-latest
+            target: powerpc-unknown-linux-gnu
+            cross: true
+          - os: ubuntu-latest
+            target: powerpc64-unknown-linux-gnu
+            cross: true
+          - os: ubuntu-latest
+            target: powerpc64le-unknown-linux-gnu
+            cross: true
+
+          - os: ubuntu-latest
+            target: riscv64gc-unknown-linux-gnu
+            cross: true
+
+          - os: ubuntu-latest
+            target: sparc64-unknown-linux-gnu
+            cross: true
+
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: windows-latest
+            target: x86_64-pc-windows-gnu
+          - os: windows-latest
+            target: i686-pc-windows-msvc
+          - os: windows-latest
+            target: i686-pc-windows-gnu
+
+          - os: macos-latest
+            target: x86_64-apple-darwin
+          - os: macos-latest
+            target: aarch64-apple-darwin
+
+    runs-on: ${{ matrix.setup.os }}
+    timeout-minutes: 45
+
+    env:
+      CARGO_CMD: cargo
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.toolchain }}
+          targets: ${{ matrix.setup.target }}
+
+      - name: Setup cross
+        if: ${{ matrix.setup.cross }}
+        run: |
+          cargo install cross --git https://github.com/cross-rs/cross
+          cross --version
+          printf 'CARGO_CMD=cross\n' >> $GITHUB_ENV
+
+      - name: Test
+        run: ${CARGO_CMD} test --all-features --target ${{ matrix.setup.target }} --verbose

@@ -1,0 +1,16 @@
+[package]
+name = "extern-trait"
+version = "0.1.0"
+edition = "2024"
+authors = ["Asakura Mizu <asakuramizu111@gmail.com>"]
+description = "Opaque foreign trait implementation"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/AsakuraMizu/extern-trait"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = { version = "2.0", features = ["full", "extra-traits"] }
