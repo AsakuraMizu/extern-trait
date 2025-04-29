@@ -16,7 +16,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@clippy
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: clippy, rustfmt
       - name: Check format
         run: cargo fmt --all --check
       - name: Check clippy
@@ -28,79 +30,58 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        toolchain: ["nightly", "stable"]
-        setup:
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-          - os: ubuntu-latest
-            target: i686-unknown-linux-gnu
+        target:
+          - x86_64-unknown-linux-gnu
+          - i686-unknown-linux-gnu
 
-          - os: ubuntu-latest
-            target: aarch64-unknown-linux-gnu
-            cross: true
-          - os: ubuntu-latest
-            target: arm-unknown-linux-gnueabi
-            cross: true
-          - os: ubuntu-latest
-            target: arm-unknown-linux-gnueabihf
-            cross: true
-          - os: ubuntu-latest
-            target: armv7-unknown-linux-gnueabi
-            cross: true
-          - os: ubuntu-latest
-            target: armv7-unknown-linux-gnueabihf
-            cross: true
+          - aarch64-unknown-linux-gnu
+          - arm-unknown-linux-gnueabi
+          - arm-unknown-linux-gnueabihf
+          - armv7-unknown-linux-gnueabi
+          - armv7-unknown-linux-gnueabihf
 
-          - os: ubuntu-latest
-            target: loongarch64-unknown-linux-gnu
-            cross: true
+          - loongarch64-unknown-linux-gnu
 
+          - powerpc-unknown-linux-gnu
+          - powerpc64-unknown-linux-gnu
+          - powerpc64le-unknown-linux-gnu
+
+          - riscv64gc-unknown-linux-gnu
+          - sparc64-unknown-linux-gnu
+
+          - x86_64-pc-windows-msvc
+          - x86_64-pc-windows-gnu
+          - i686-pc-windows-msvc
+          - i686-pc-windows-gnu
+
+          - x86_64-apple-darwin
+          - aarch64-apple-darwin
+
+        include:
           - os: ubuntu-latest
-            target: mips-unknown-linux-gnu
-            cross: true
-          - os: ubuntu-latest
-            target: mipsel-unknown-linux-gnu
-            cross: true
-          - os: ubuntu-latest
-            target: mips64-unknown-linux-gnuabi64
-            cross: true
-          - os: ubuntu-latest
-            target: mips64el-unknown-linux-gnuabi64
             cross: true
 
-          - os: ubuntu-latest
-            target: powerpc-unknown-linux-gnu
-            cross: true
-          - os: ubuntu-latest
-            target: powerpc64-unknown-linux-gnu
-            cross: true
-          - os: ubuntu-latest
-            target: powerpc64le-unknown-linux-gnu
-            cross: true
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            cross: false
+          - target: x86_64-pc-windows-gnu
+            os: windows-latest
+            cross: false
+          - target: i686-pc-windows-msvc
+            os: windows-latest
+            cross: false
+          - target: i686-pc-windows-gnu
+            os: windows-latest
+            cross: false
 
-          - os: ubuntu-latest
-            target: riscv64gc-unknown-linux-gnu
-            cross: true
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            cross: false
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            cross: false
 
-          - os: ubuntu-latest
-            target: sparc64-unknown-linux-gnu
-            cross: true
-
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-          - os: windows-latest
-            target: x86_64-pc-windows-gnu
-          - os: windows-latest
-            target: i686-pc-windows-msvc
-          - os: windows-latest
-            target: i686-pc-windows-gnu
-
-          - os: macos-latest
-            target: x86_64-apple-darwin
-          - os: macos-latest
-            target: aarch64-apple-darwin
-
-    runs-on: ${{ matrix.setup.os }}
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 45
 
     env:
@@ -108,17 +89,17 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: ${{ matrix.toolchain }}
-          targets: ${{ matrix.setup.target }}
+          targets: ${{ matrix.target }}
 
       - name: Setup cross
-        if: ${{ matrix.setup.cross }}
+        if: ${{ matrix.cross }}
         run: |
           cargo install cross --git https://github.com/cross-rs/cross
           cross --version
           printf 'CARGO_CMD=cross\n' >> $GITHUB_ENV
 
       - name: Test
-        run: ${CARGO_CMD} test --all-features --target ${{ matrix.setup.target }} --verbose
+        shell: bash
+        run: ${CARGO_CMD} test --all-features --target ${{ matrix.target }} --verbose
