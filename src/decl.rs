@@ -130,7 +130,7 @@ pub fn expand(proxy: ItemStruct, input: ItemTrait) -> Result<TokenStream> {
         #[doc(hidden)]
         #[macro_export]
         macro_rules! #macro_name {
-            ($trait:path, $ty:ty) => {
+            ($trait:path: $ty:ty) => {
                 const _: () = {
                     #macro_content
 
