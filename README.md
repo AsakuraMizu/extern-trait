@@ -137,6 +137,7 @@ const _: () = {
 
 An `#[extern_trait]` may have supertraits to forward more trait implementations. The currently supported traits are:
 - `Send`/`Sync`
+- `AsRef`
 - *TODO: support more*
 
 ```rust
