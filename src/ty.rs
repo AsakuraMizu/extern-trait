@@ -1,9 +1,49 @@
-use syn::{GenericArgument, PathArguments, ReturnType, Type, parse_quote};
+use syn::{
+    GenericArgument, Lifetime, PathArguments, ReturnType, Token, Type, TypePtr, TypeReference,
+    parse_quote,
+};
 
-pub enum SelfKind {
+#[derive(Debug, Clone, Copy)]
+pub enum SelfKind<'a> {
     Value,
-    Ptr,
-    Ref(bool),
+    Ptr {
+        star_token: &'a Token![*],
+        const_token: &'a Option<Token![const]>,
+        mutability: &'a Option<Token![mut]>,
+    },
+    Ref {
+        and_token: &'a Token![&],
+        lifetime: &'a Option<Lifetime>,
+        mutability: &'a Option<Token![mut]>,
+    },
+}
+
+impl SelfKind<'_> {
+    pub fn into_type_for(self, elem: Box<Type>) -> Box<Type> {
+        match self {
+            SelfKind::Value => elem,
+            SelfKind::Ptr {
+                star_token,
+                const_token,
+                mutability,
+            } => Box::new(Type::Ptr(TypePtr {
+                star_token: *star_token,
+                const_token: *const_token,
+                mutability: *mutability,
+                elem,
+            })),
+            SelfKind::Ref {
+                and_token,
+                lifetime,
+                mutability,
+            } => Box::new(Type::Reference(TypeReference {
+                and_token: *and_token,
+                lifetime: lifetime.clone(),
+                mutability: *mutability,
+                elem,
+            })),
+        }
+    }
 }
 
 pub trait TypeExt {
@@ -87,15 +127,35 @@ impl TypeExt for Type {
 
         if *self == self_ty {
             Some(SelfKind::Value)
-        } else if let Type::Ptr(t) = self {
-            if *t.elem == self_ty {
-                Some(SelfKind::Ptr)
+        } else if let Type::Ptr(TypePtr {
+            star_token,
+            const_token,
+            mutability,
+            elem,
+        }) = self
+        {
+            if **elem == self_ty {
+                Some(SelfKind::Ptr {
+                    star_token,
+                    const_token,
+                    mutability,
+                })
             } else {
                 None
             }
-        } else if let Type::Reference(t) = self {
-            if *t.elem == self_ty {
-                Some(SelfKind::Ref(t.mutability.is_some()))
+        } else if let Type::Reference(TypeReference {
+            and_token,
+            lifetime,
+            mutability,
+            elem,
+        }) = self
+        {
+            if **elem == self_ty {
+                Some(SelfKind::Ref {
+                    and_token,
+                    lifetime,
+                    mutability,
+                })
             } else {
                 None
             }

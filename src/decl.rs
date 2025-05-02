@@ -101,9 +101,9 @@ pub fn expand(proxy: ItemStruct, input: ItemTrait) -> Result<TokenStream> {
             fn drop(&mut self) {
                 unsafe extern "Rust" {
                     #[link_name = #drop_name]
-                    fn drop(this: *mut #proxy_name);
+                    safe fn drop(this: *mut #proxy_name);
                 }
-                unsafe { drop(self) }
+                drop(self)
             }
         }
 
@@ -150,30 +150,19 @@ fn generate_proxy_impl(
         })
         .collect::<Vec<_>>();
 
-    let mut deref = None;
+    let proxy: Box<Type> = parse_quote!(#proxy_name);
 
     let output = match &sig.output {
         ReturnType::Default => ReturnType::Default,
         ReturnType::Type(arr, ty) => ReturnType::Type(*arr, {
             if ty.contains_self() {
-                match ty.self_kind() {
-                    Some(SelfKind::Value) => parse_quote!(#proxy_name),
-                    Some(SelfKind::Ptr) => parse_quote!(*const #proxy_name),
-                    Some(SelfKind::Ref(mutable)) => {
-                        if mutable {
-                            deref = Some(quote!(&mut*));
-                            parse_quote!(*mut #proxy_name)
-                        } else {
-                            deref = Some(quote!(&*));
-                            parse_quote!(*const #proxy_name)
-                        }
-                    }
-                    None => {
-                        return Err(Error::new_spanned(
-                            ty,
-                            "Too complex return type for #[extern_trait]",
-                        ));
-                    }
+                if let Some(kind) = ty.self_kind() {
+                    kind.into_type_for(proxy.clone())
+                } else {
+                    return Err(Error::new_spanned(
+                        ty,
+                        "Too complex return type for #[extern_trait]",
+                    ));
                 }
             } else {
                 ty.clone()
@@ -190,19 +179,19 @@ fn generate_proxy_impl(
         })
         .map(|ty| {
             if ty.contains_self() {
-                match ty.self_kind() {
-                    Some(SelfKind::Ptr) | Some(SelfKind::Ref(_)) => {
-                        Ok(parse_quote!(*const #proxy_name))
+                if let Some(kind) = ty.self_kind() {
+                    if matches!(kind, SelfKind::Value) {
+                        return Err(Error::new_spanned(
+                            ty,
+                            "Passing `Self` by value is not supported for #[extern_trait] yet",
+                        ));
                     }
-                    // TODO: pass `Self` by value
-                    Some(SelfKind::Value) => Err(Error::new_spanned(
-                        ty,
-                        "Passing `Self` by value is not supported for #[extern_trait] yet",
-                    )),
-                    None => Err(Error::new_spanned(
+                    Ok(kind.into_type_for(proxy.clone()))
+                } else {
+                    Err(Error::new_spanned(
                         ty,
                         "Too complex argument type for #[extern_trait]",
-                    )),
+                    ))
                 }
             } else {
                 Ok(ty.clone())
@@ -214,32 +203,28 @@ fn generate_proxy_impl(
         #sig {
             unsafe extern "Rust" {
                 #[link_name = #export_name]
-                fn #ident(#(_: #inputs),*) #output;
+                safe fn #ident(#(_: #inputs),*) #output;
             }
-            unsafe { #deref #ident(#(#args),*) }
+            #ident(#(#args),*)
         }
     })
 }
 
-fn generate_macro_rules(trait_: Option<&Ident>, export_name: &str, sig: &Signature) -> TokenStream {
+fn generate_macro_rules(
+    trait_: Option<TokenStream>,
+    export_name: &str,
+    sig: &Signature,
+) -> TokenStream {
     let ident = &sig.ident;
+
+    let placeholder = Box::new(Type::Verbatim(quote!($ty)));
 
     let output = match &sig.output {
         ReturnType::Default => ReturnType::Default,
         ReturnType::Type(arr, ty) => ReturnType::Type(
             *arr,
             if ty.contains_self() {
-                Box::new(Type::Verbatim(match ty.self_kind().unwrap() {
-                    SelfKind::Value => quote!($ty),
-                    SelfKind::Ptr => quote!(*const $ty),
-                    SelfKind::Ref(mutable) => {
-                        if mutable {
-                            quote!(&mut $ty)
-                        } else {
-                            quote!(& $ty)
-                        }
-                    }
-                }))
+                ty.self_kind().unwrap().into_type_for(placeholder.clone())
             } else {
                 ty.clone()
             },
@@ -258,17 +243,7 @@ fn generate_macro_rules(trait_: Option<&Ident>, export_name: &str, sig: &Signatu
             (
                 format_ident!("_{}", i),
                 if ty.contains_self() {
-                    Box::new(Type::Verbatim(match ty.self_kind().unwrap() {
-                        SelfKind::Value => quote!($ty),
-                        SelfKind::Ptr => quote!(*const $ty),
-                        SelfKind::Ref(mutable) => {
-                            if mutable {
-                                quote!(&mut $ty)
-                            } else {
-                                quote!(& $ty)
-                            }
-                        }
-                    }))
+                    ty.self_kind().unwrap().into_type_for(placeholder.clone())
                 } else {
                     ty.clone()
                 },
@@ -276,7 +251,7 @@ fn generate_macro_rules(trait_: Option<&Ident>, export_name: &str, sig: &Signatu
         })
         .unzip();
 
-    let trait_ = trait_.map_or_else(|| quote!($trait), |trait_| quote!(#trait_));
+    let trait_ = trait_.unwrap_or_else(|| quote!($trait));
 
     quote! {
         #[doc(hidden)]

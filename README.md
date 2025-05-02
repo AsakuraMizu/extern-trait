@@ -23,8 +23,10 @@ pub unsafe trait Hello {
     fn hello(&self);
 }
 
-let v = HelloProxy::new(42);
-v.hello();
+fn main() {
+    let v = HelloProxy::new(42);
+    v.hello();
+}
 
 // In crate B
 struct HelloImpl(i32);
@@ -65,17 +67,17 @@ unsafe impl Hello for HelloProxy {
     fn new(_0: i32) -> Self {
         unsafe extern "Rust" {
             #[link_name = "__extern_trait_A_0.1.0_A_Hello_new"]
-            fn new(_: i32) -> HelloProxy;
+            safe fn new(_: i32) -> HelloProxy;
         }
-        unsafe { new(_0) }
+        new(_0)
     }
 
     fn hello(&self) {
         unsafe extern "Rust" {
             #[link_name = "__extern_trait_A_0.1.0_A_Hello_hello"]
-            fn hello(_: *const HelloProxy);
+            safe fn hello(_: &HelloProxy);
         }
-        unsafe { hello(self) }
+        hello(self)
     }
 }
 
@@ -83,9 +85,9 @@ impl Drop for HelloProxy {
     fn drop(&mut self) {
         unsafe extern "Rust" {
             #[link_name = "__extern_trait_A_0.1.0_A_Hello_drop"]
-            fn drop(this: *mut HelloProxy);
+            safe fn drop(this: *mut HelloProxy);
         }
-        unsafe { drop(self) }
+        drop(self)
     }
 }
 
