@@ -23,10 +23,8 @@ pub unsafe trait Hello {
     fn hello(&self);
 }
 
-fn main() {
-    let v = HelloProxy::new(42);
-    v.hello();
-}
+let v = HelloProxy::new(42);
+v.hello();
 
 // In crate B
 struct HelloImpl(i32);
