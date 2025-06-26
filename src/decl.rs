@@ -105,6 +105,11 @@ pub fn expand(proxy: ItemStruct, input: ItemTrait) -> Result<TokenStream> {
     }
 
     let drop_name = format!("{symbol_prefix}_drop");
+    let reflect_name = format!("{symbol_prefix}_reflect");
+    let generic_doc = format!(
+        "`T` must implement [`{}`] via `#[extern_trait]`.",
+        trait_name
+    );
 
     Ok(quote! {
         #input
@@ -127,6 +132,46 @@ pub fn expand(proxy: ItemStruct, input: ItemTrait) -> Result<TokenStream> {
             }
         }
 
+        impl #proxy_name {
+            unsafe fn reflect<T, R>() -> extern "Rust" fn(T) -> R {
+                unsafe extern "Rust" {
+                    #[link_name = #reflect_name]
+                    safe fn reflect(this: #proxy_name) -> #proxy_name;
+                }
+                unsafe {
+                    ::core::mem::transmute::<_, extern "Rust" fn(T) -> R>(reflect as *const ())
+                }
+            }
+
+            /// Convert the proxy type from the implementation type.
+            /// # Safety
+            #[doc = #generic_doc]
+            pub unsafe fn from_impl<T: #trait_name>(value: T) -> Self {
+                unsafe { Self::reflect::<T, #proxy_name>()(value) }
+            }
+
+            /// Convert the proxy type into the implementation type.
+            /// # Safety
+            #[doc = #generic_doc]
+            pub unsafe fn into_impl<T: #trait_name>(self) -> T {
+                unsafe { Self::reflect::<#proxy_name, T>()(self) }
+            }
+
+            /// Returns a reference to the implementation type.
+            /// # Safety
+            #[doc = #generic_doc]
+            pub unsafe fn downcast_ref<T: #trait_name>(&self) -> &T {
+                unsafe { &*(self as *const Self as *const T) }
+            }
+
+            /// Returns a mutable reference to the implementation type.
+            /// # Safety
+            #[doc = #generic_doc]
+            pub unsafe fn downcast_mut<T: #trait_name>(&mut self) -> &mut T {
+                unsafe { &mut *(self as *mut Self as *mut T) }
+            }
+        }
+
         #[doc(hidden)]
         #[macro_export]
         macro_rules! #macro_name {
@@ -136,8 +181,14 @@ pub fn expand(proxy: ItemStruct, input: ItemTrait) -> Result<TokenStream> {
 
                     #[doc(hidden)]
                     #[unsafe(export_name = #drop_name)]
-                    unsafe extern "Rust" fn drop(this: &mut $ty) {
+                    extern "Rust" fn drop(this: &mut $ty) {
                         unsafe { ::core::ptr::drop_in_place(this) };
+                    }
+
+                    #[doc(hidden)]
+                    #[unsafe(export_name = #reflect_name)]
+                    extern "Rust" fn reflect(this: $ty) -> $ty {
+                        this
                     }
                 };
             };
