@@ -48,7 +48,7 @@ impl SelfKind<'_> {
 
 pub trait TypeExt {
     fn contains_self(&self) -> bool;
-    fn self_kind(&self) -> Option<SelfKind>;
+    fn self_kind(&self) -> Option<SelfKind<'_>>;
 }
 
 impl TypeExt for Type {
@@ -122,7 +122,7 @@ impl TypeExt for Type {
         }
     }
 
-    fn self_kind(&self) -> Option<SelfKind> {
+    fn self_kind(&self) -> Option<SelfKind<'_>> {
         let self_ty = parse_quote!(Self);
 
         if *self == self_ty {
