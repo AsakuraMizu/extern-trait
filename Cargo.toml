@@ -1,6 +1,6 @@
 [package]
 name = "extern-trait"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
 authors = ["Asakura Mizu <asakuramizu111@gmail.com>"]
 description = "Opaque foreign trait implementation"
